@@ -99,6 +99,64 @@ def night_summary(spo2_1hz, invalid):
         "criteria": f"desat >= {DROP_PCT}% vs max of previous {BASELINE_S} s, duration >= {MIN_DUR_S} s",
     }
 
+# tamanho da janela e passo sem sobreposicao
+WIN_S = 60
+WIN_STEP_S = 60
+
+
+# maior valor dos 60 s anteriores
+def baseline_series(spo2_1hz, baseline_s=BASELINE_S, min_baseline_s=MIN_BASELINE_S):
+    v = pd.Series(np.asarray(spo2_1hz, dtype=float))
+    return v.shift(1).rolling(baseline_s, min_periods=min_baseline_s).max().to_numpy()
+
+
+# features de UMA janela de 1 Hz (v = SpO2 com NaN onde eh invalido, base = linha de base)
+def window_features(v, base):
+    v = np.asarray(v, dtype=float)
+    base = np.asarray(base, dtype=float)
+    valid = ~np.isnan(v)
+
+    feats = {"valid_frac": float(valid.mean())}
+
+    # janela sem sinal: tudo NaN (o modelo trata)
+    if valid.sum() < 2:
+        for k in ["spo2_mean", "spo2_min", "spo2_std", "spo2_range", "drop_max", "drop_mean",
+                  "secs_below3", "secs_below4", "area_below", "fall_rate_max", "rise_rate_max"]:
+            feats[k] = np.nan
+        return feats
+
+    # quanto o sinal ta abaixo da linha de base em cada segundo
+    drop = base - v
+
+    # variacao em 5 s (pra ver se cai ou sobe rapido)
+    diff5 = v[5:] - v[:-5]
+
+    feats.update({
+        "spo2_mean": float(np.nanmean(v)),
+        "spo2_min": float(np.nanmin(v)),
+        "spo2_std": float(np.nanstd(v)),
+        "spo2_range": float(np.nanmax(v) - np.nanmin(v)),
+        "drop_max": float(np.nanmax(drop)) if np.any(~np.isnan(drop)) else np.nan,
+        "drop_mean": float(np.nanmean(drop)) if np.any(~np.isnan(drop)) else np.nan,
+        "secs_below3": int(np.sum(drop >= 3)),
+        "secs_below4": int(np.sum(drop >= 4)),
+        "area_below": float(np.nansum(np.clip(drop, 0, None))),
+        "fall_rate_max": float(np.nanmax(-diff5) / 5) if np.any(~np.isnan(diff5)) else np.nan,
+        "rise_rate_max": float(np.nanmax(diff5) / 5) if np.any(~np.isnan(diff5)) else np.nan,
+    })
+    return feats
+
+
+# corta a noite em janelas e calcula as features de cada uma
+def night_windows(spo2_1hz, invalid, win_s=WIN_S, step_s=WIN_STEP_S):
+    v = np.where(np.asarray(invalid, dtype=bool), np.nan, np.asarray(spo2_1hz, dtype=float))
+    base = baseline_series(v)
+
+    rows = []
+    for start in range(0, len(v) - win_s + 1, step_s):
+        feats = window_features(v[start:start + win_s], base[start:start + win_s])
+        rows.append({"start_s": start, "end_s": start + win_s, **feats})
+    return pd.DataFrame(rows)
 
 # atalho: do sinal cru (fs Hz) direto pro resumo, com o filtro basico
 def summarize_night(spo2, fs):
