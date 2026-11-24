@@ -1,0 +1,4 @@
+method,tp,fn,fp,tn,sens,spec,correct,n,sens_ci,spec_ci
+rule ODI3 >= 15,13,1,2,9,0.929,0.818,22,25,0.69-0.99,0.52-0.95
+window model (logistic),11,3,3,8,0.786,0.727,19,25,0.52-0.92,0.43-0.90
+window model (gboost),10,4,4,7,0.714,0.636,17,25,0.45-0.88,0.35-0.85

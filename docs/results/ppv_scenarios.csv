@@ -1,0 +1,3 @@
+scenario,prevalence,ppv,npv
+primary care (assumed),0.15,0.47,0.98
+referral cohort (UCDDB),0.56,0.87,0.9
