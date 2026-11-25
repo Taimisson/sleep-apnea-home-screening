@@ -1,0 +1,10 @@
+# servicos do prototipo (rodar da raiz do repo: docker compose up -d)
+services:
+  # broker mqtt (iot)
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    ports:
+      - "127.0.0.1:1883:1883"   # so a propria maquina acessa
+    volumes:
+      - ./iot/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
