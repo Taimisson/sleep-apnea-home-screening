@@ -30,7 +30,9 @@ def to_1hz(spo2, fs):
 # o portao de qualidade do edge (iot/quality_gate.py) pode trocar ou completar isso
 def basic_invalid_mask(spo2_1hz, out_of_range):
     jump = np.r_[0, np.abs(np.diff(spo2_1hz))] > MAX_JUMP
-    return out_of_range | jump
+    # segundo q n chegou (NaN) tbm eh invalido, senao conta como hora valida
+    missing = np.isnan(spo2_1hz)
+    return out_of_range | jump | missing
 
 
 # acha as dessaturacoes num sinal de 1 Hz (segundo invalido = NaN)
@@ -186,7 +188,14 @@ if __name__ == "__main__":
     fake2[150:155] = 91.0
     assert len(detect_desaturations(fake2)) == 0, "queda curta n devia virar evento"
 
-    # teste 3: noite 002 tem q bater com o mid-term (ODI3 = 19.9/h)
+    # teste 3: segundo faltando (NaN) tem q contar como invalido
+    s1 = np.full(100, 96.0)
+    s1[40:50] = np.nan
+    mask = basic_invalid_mask(s1, np.zeros(100, dtype=bool))
+    assert mask[40:50].all() and not mask[:40].any(), "segundo NaN devia ser invalido"
+    assert (~mask).sum() == 90, "so os 90 segundos com sinal contam como validos"
+
+    # teste 4: noite 002 tem q bater com o mid-term (ODI3 = 19.9/h)
     rec = load_spo2("002")
     summ = summarize_night(rec["spo2"], rec["fs"])
     assert summ["odi3_per_h"] == 19.9, f"esperava ODI3 19.9 na 002, veio {summ['odi3_per_h']}"
